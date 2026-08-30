@@ -1,8 +1,9 @@
-"""Command-line interface: capture a LinkedIn session and check it."""
+"""Command-line interface: capture a session, check it, run the API."""
 
 from __future__ import annotations
 
 import typer
+import uvicorn
 
 from app import auth as auth_file
 from app.auth import DURABILITY, RECOMMENDED, REQUIRED, Auth, AuthError
@@ -10,7 +11,7 @@ from app.config import get_settings
 from app.session import LinkedInSession
 
 cli = typer.Typer(
-    help="Capture and inspect a LinkedIn session.",
+    help="Capture a LinkedIn session and run the profile API.",
     no_args_is_help=True,
 )
 
@@ -100,6 +101,22 @@ def status() -> None:
         typer.secho("session:  expired", fg="red")
         raise typer.Exit(1)
     typer.secho("session:  alive", fg="green")
+
+
+@cli.command()
+def serve(
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    reload: bool = False,
+) -> None:
+    """Run the API. Checks a credential exists without calling LinkedIn."""
+    settings = get_settings()
+    try:
+        auth_file.load(settings.auth_file)
+    except AuthError as exc:
+        typer.secho(f"{exc}", fg="red", err=True)
+        raise typer.Exit(1) from exc
+    uvicorn.run("app.main:app", host=host, port=port, reload=reload)
 
 
 if __name__ == "__main__":
