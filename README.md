@@ -174,6 +174,10 @@ Results are cached on disk so repeat requests cost nothing upstream.
 
 ## Known limitations
 
+- **No authentication.** The API does not require a key, so a publicly reachable
+  instance is usable by anyone who finds it — spending the rate limit of the
+  LinkedIn account behind it. Put it behind an API key or Cloudflare Access
+  before exposing it anywhere it matters.
 - **Sections cost extra calls.** Skills, certifications and languages are not
   inlined in the profile response; each needs its own request. Pass
   `?sections=false` to skip them when you only need the core profile. Results
