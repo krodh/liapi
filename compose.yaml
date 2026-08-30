@@ -1,0 +1,33 @@
+services:
+  liapi:
+    build: .
+    image: liapi:latest
+    container_name: liapi
+    restart: unless-stopped
+    environment:
+      # Overridable without rebuilding; see docs/architecture.md.
+      CACHE_TTL: "3600"
+    volumes:
+      # auth.json is a credential captured on a workstation and mounted in —
+      # never baked into the image. cache/ persists across restarts.
+      - ./data:/data
+    # Bound to loopback only. Nothing reaches this from outside the host except
+    # through the tunnel below, which talks to it over the compose network.
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  # Started with:  docker compose --profile tunnel up -d
+  # Needs TUNNEL_TOKEN in .env (from the Cloudflare Zero Trust dashboard).
+  # In the tunnel's public hostname config, point the service at http://liapi:8000
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: liapi-tunnel
+    restart: unless-stopped
+    profiles: ["tunnel"]
+    environment:
+      # cloudflared reads this itself; keep it out of the command line so it
+      # never shows up in `docker ps` or process listings.
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    command: tunnel --no-autoupdate run
+    depends_on:
+      - liapi
