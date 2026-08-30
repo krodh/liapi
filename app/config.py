@@ -22,13 +22,20 @@ class Settings(BaseSettings):
     max_delay: float = 5.0
     timeout: float = 20.0
 
+    # Where fetched profiles are cached, one JSON file per profile.
+    cache_dir: Path = Path("cache/profiles")
+
+    # How long a cached profile stays fresh (seconds).
+    cache_ttl: float = 3600.0
 
     def model_post_init(self, _context: object) -> None:
         # The default lives beside pyproject.toml, so the CLI behaves the same
         # from any directory. An explicit AUTH_FILE is left alone and resolves
         # against the working directory, as a caller would expect.
-        if "auth_file" not in self.model_fields_set and not self.auth_file.is_absolute():
-            self.auth_file = PROJECT_ROOT / self.auth_file
+        for name in ("auth_file", "cache_dir"):
+            value = getattr(self, name)
+            if name not in self.model_fields_set and not value.is_absolute():
+                setattr(self, name, PROJECT_ROOT / value)
 
 
 @lru_cache

@@ -10,6 +10,7 @@ from fastapi import Path as FPath
 
 from app import auth as auth_file
 from app.auth import AuthError
+from app.cache import ProfileCache
 from app.config import get_settings
 from app.models import Certification, Language, Profile, parse_profile, parse_section
 from app.session import LinkedInSession, SessionError, SessionKilled
@@ -19,6 +20,11 @@ app = FastAPI(
     version="0.1.0",
     summary="Structured profile data from LinkedIn's Voyager endpoints.",
 )
+
+# Profiles change rarely, and each fetch costs several paced upstream calls, so
+# results are cached on disk — surviving restarts, unlike an in-memory cache.
+_settings = get_settings()
+_profiles = ProfileCache(_settings.cache_dir, _settings.cache_ttl)
 
 # Accepts a full profile URL or a bare public id (vanity slug). The path is
 # declared `:path` so a full URL, slashes and all, can be passed inline.
@@ -74,10 +80,16 @@ def profile(
             "upstream call, so disabling this makes the request noticeably faster."
         ),
     ),
+    refresh: bool = Query(False, description="Bypass the cache for this request."),
 ) -> Profile:
     """Fetch a profile as structured JSON."""
     settings = get_settings()
     public_id = _public_id(identifier)
+
+    if not refresh:
+        hit = _profiles.get(public_id, want_sections=sections)
+        if hit is not None:
+            return Profile.model_validate(hit)
 
     try:
         session = LinkedInSession(auth_file.load(settings.auth_file), settings)
@@ -94,6 +106,7 @@ def profile(
     finally:
         session.close()
 
+    _profiles.set(public_id, result.model_dump(), sections=sections)
     return result
 
 
